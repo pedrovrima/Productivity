@@ -1,0 +1,164 @@
+<!DOCTYPE html U>
+<html>
+<head>
+        <meta charset="utf-8">
+
+<style>
+
+svg {
+    display: block;
+    margin: 0 auto;
+}
+
+.axis .domain {
+    display: none;
+}
+
+.axis--x text {
+    fill: #999;
+}
+
+.axis--x line {
+    stroke: #aaa;
+}
+
+.axis--year .tick line {
+    display: none;
+}
+
+.axis--year text {
+    font-size: 15px;
+    fill: #000;
+}
+
+</style>
+</head>
+<body>
+<script src="d3.v4.min.js"></script>
+<script>
+
+var numHorizons = 15;
+
+var margin = { top: 30, right: 10, bottom: 30, left: 70 },
+    width = 1100 - margin.left - margin.right,
+    height = 2200 - margin.top - margin.bottom;
+
+var formatTime = d3.timeFormat('%j');
+
+var svg = d3.select('body').append('svg')
+        .attr('width', width + margin.left + margin.right)
+        .attr('height', height + margin.top + margin.bottom)
+        .append('g')
+        .attr('transform', 'translate(' + margin.left + ',' + margin.top + ')');
+
+var x = function(d) { return d.date; },
+    xScale = d3.scaleLinear().range([0, width]),
+    xValue = function(d) {return xScale(x(d)); },
+    xAxis = d3.axisBottom(xScale);
+
+
+var vv = function(d){ return d.year;}
+
+var y = function(d) { return d.value; },
+    yScale = d3.scaleLinear().clamp(true),
+    y0Value = function(d) { return yScale(0); }
+    y1Value = function(d) { return yScale(y(d)); };
+
+var year = function(d) { return d.key; },
+    yearScale = d3.scaleBand().range([0, height]).padding(0.05),
+    yearValue = function(d) { return yearScale(year(d)); },
+    yearAxis = d3.axisLeft(yearScale);
+
+var horizonScale = d3.scaleQuantize()
+    .range(d3.range(numHorizons));
+
+var fill = function(d) { return d.yExtent[0]; },
+    fillScale = d3.scaleLinear().range(['lavender', 'purple']).interpolate(d3.interpolateHcl),
+    fillValue = function(d) { return fillScale(fill(d)); };
+
+var area = d3.area()
+    .x(xValue)
+    .y0(y0Value)
+    .y1(y1Value);
+
+
+function row(d) {
+    return {
+        year: d.year,
+        date: d.date,
+        value: +d.value
+    };
+}
+
+d3.csv('data.csv', row, function(error, dataFlat) {
+    if (error) throw error;
+
+    // Sort by time
+    dataFlat.sort(function(a, b) { return a.year - b.year; });
+
+    var data = d3.nest()
+        .key(function(d) { return d.year; })
+        .entries(dataFlat);
+    
+    
+    // Sort activities by peak year time
+  
+    
+    
+    data.sort(function(a, b) { return b.year - a.year; });
+
+    console.log(dataFlat)
+
+    xScale.domain([150,315]);
+
+
+
+    console.log(d3.extent(dataFlat,x))
+    yearScale.domain(data.map(function(d) { return d.key; }));
+
+    yScale.range([yearScale.bandwidth(), 0]);
+
+    horizonScale.domain(d3.extent(dataFlat, y));
+
+    svg.append('g').attr('class', 'axis axis--x')
+        .attr('transform', 'translate(0,' + height + ')')
+        .call(xAxis);
+
+    svg.append('g').attr('class', 'axis axis--year')
+        .call(yearAxis);
+
+    var gyear = svg.append('g').attr('class', 'activities')
+            .selectAll('.year').data(data)
+            .enter().append('g')
+            .attr('class', function(d) { return 'year year--' + d.key; })
+            .attr('transform', function(d) {
+                var ty = yearValue(d);
+                return 'translate(0,' + ty + ')';
+            });
+    
+    function horizonData(d) {
+        return horizonScale.range()
+            .map(function(i) {
+                return {
+                    yExtent: horizonScale.invertExtent(i),
+                    key: d.key,
+                    values: d.values
+                };
+            });
+    }
+
+    var gHorizon = gyear.selectAll('.horizon').data(horizonData)
+        .enter().append('path')
+            .attr('class', 'horizon')
+            .each(function(d) {
+                // TODO: create separate y-scales using d3.local()
+                yScale.domain(d.yExtent);
+                d3.select(this)
+                    .attr('d', area(d.values));
+            })
+            .style('fill', fillValue);
+});
+
+</script>
+</body>
+</html>
